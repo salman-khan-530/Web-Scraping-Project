@@ -1,0 +1,3 @@
+﻿name,price,rating,availability,url,category,description
+Example Product,25.99,4,In Stock,https://example.com/product,Books,Example product description.
+Another Product,39.99,5,In Stock,https://example.com/product2,Science,Another product description.
