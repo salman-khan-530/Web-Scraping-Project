@@ -313,13 +313,26 @@ def extract_product_details(soup):
         ".breadcrumb li a"
     )
 
+    category = None
+
     if len(breadcrumb_links) >= 3:
 
         category = breadcrumb_links[2].get_text(
             strip=True
         )
 
-        if not category:
+        # Books to Scrape has some products
+        # with an incorrect category value.
+        if category.lower() == "add a comment":
+
+            logger.warning(
+                "Invalid category detected: "
+                "'Add a comment'. Setting category to None."
+            )
+
+            category = None
+
+        elif not category:
 
             logger.warning(
                 "Product category is empty."
