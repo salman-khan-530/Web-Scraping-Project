@@ -1,7 +1,3 @@
-# Website configuration
-
-BASE_URL = "https://books.toscrape.com/"
-
 
 # Scraper configuration
 

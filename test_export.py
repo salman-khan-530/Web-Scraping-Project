@@ -11,7 +11,7 @@ data = [
         "rating": 4,
         "availability": "In Stock",
         "url": "https://example.com/product",
-        "category": "Books",
+        "category": "Electronics",
         "description": "Example product description."
     },
     {

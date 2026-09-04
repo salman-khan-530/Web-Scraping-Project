@@ -228,26 +228,6 @@ def extract_products(soup, base_url):
                     product_href
                 )
 
-                # Books to Scrape sometimes provides
-                # product URLs without the /catalogue/
-                # directory. Correct that structure.
-                if (
-                    url.startswith(
-                        "https://books.toscrape.com/"
-                    )
-                    and "/catalogue/" not in url
-                ):
-
-                    product_path = url.replace(
-                        "https://books.toscrape.com/",
-                        ""
-                    )
-
-                    url = urljoin(
-                        "https://books.toscrape.com/catalogue/",
-                        product_path
-                    )
-
                 logger.info(
                     f"Product URL resolved: {url}"
                 )
@@ -321,8 +301,8 @@ def extract_product_details(soup):
             strip=True
         )
 
-        # Books to Scrape has some products
-        # with an incorrect category value.
+        # Some product pages may contain
+        # incorrect category values.
         if category.lower() == "add a comment":
 
             logger.warning(
@@ -407,7 +387,7 @@ def extract_product_details(soup):
         # REMOVE DUPLICATED PREFIX
         # --------------------------------------------------
         #
-        # Some Books to Scrape pages contain:
+        # Some product pages may contain:
         #
         #   Short preview + Full description
         #

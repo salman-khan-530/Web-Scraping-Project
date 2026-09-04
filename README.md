@@ -4,11 +4,11 @@ A modular Python-based web scraping project that collects e-commerce product inf
 
 ## Project Overview
 
-The **E-Commerce Product Data Web Scraper** is designed to collect structured product information from publicly accessible e-commerce sources.
+The **E-Commerce Product Data Web Scraper** is designed to collect structured product information from e-commerce sources using appropriate and authorized data-access methods.
 
-The project currently includes a working scraper for **Books to Scrape**, which is used as a safe practice website. The architecture also includes scraper modules for **Amazon, Alibaba, and Flipkart**, prepared for integration through authorized APIs or other approved data-access methods.
+The project architecture currently includes scraper modules for **Amazon, Alibaba, and Flipkart**. These modules are structured to support integration through official APIs or other authorized data-access methods.
 
-### Data collected
+### Data Collected
 
 For each product, the scraper is designed to handle:
 
@@ -23,7 +23,7 @@ For each product, the scraper is designed to handle:
 
 ## Features
 
-- Web scraping with Python Requests
+- Web scraping architecture with Python Requests
 - HTML parsing with BeautifulSoup
 - Pagination handling
 - Product search
@@ -44,6 +44,7 @@ For each product, the scraper is designed to handle:
 - Data visualization
 - Logging
 - Command-line interface
+- Streamlit web interface
 - Modular and reusable project structure
 
 ## Technologies Used
@@ -54,6 +55,7 @@ For each product, the scraper is designed to handle:
 - Pandas
 - OpenPyXL
 - Matplotlib
+- Streamlit
 - Jupyter Notebook
 - Git & GitHub
 
@@ -71,7 +73,6 @@ Web Scraping Project/
 │   ├── parser.py
 │   ├── pagination.py
 │   ├── base_scraper.py
-│   ├── books_scraper.py
 │   ├── amazon_scraper.py
 │   ├── alibaba_scraper.py
 │   ├── flipkart_scraper.py
@@ -91,8 +92,8 @@ Web Scraping Project/
 │   └── 01_requests_basics.ipynb
 │
 ├── logs/
-│   └── scraper.log
 │
+├── app.py
 ├── main.py
 ├── analyze_data.py
 ├── visualize_data.py
@@ -103,25 +104,25 @@ Web Scraping Project/
 
 ## Installation
 
-### 1. Clone the repository
+### 1. Clone the Repository
 
 ```bash
 git clone https://github.com/salman-khan-530/Web-Scraping-Project.git
 ```
 
-### 2. Navigate to the project
+### 2. Navigate to the Project
 
 ```bash
 cd Web-Scraping-Project
 ```
 
-### 3. Create a virtual environment
+### 3. Create a Virtual Environment
 
 ```bash
 python -m venv .venv
 ```
 
-### 4. Activate the virtual environment
+### 4. Activate the Virtual Environment
 
 #### Windows PowerShell
 
@@ -129,7 +130,7 @@ python -m venv .venv
 .venv\Scripts\Activate.ps1
 ```
 
-### 5. Install dependencies
+### 5. Install Dependencies
 
 ```bash
 pip install -r requirements.txt
@@ -137,46 +138,62 @@ pip install -r requirements.txt
 
 ## Usage
 
-The scraper is controlled through the command line.
+The project provides both a command-line interface and a Streamlit web interface.
 
-### Search Books to Scrape
+### Command-Line Interface
 
-```powershell
-python main.py --websites books --query light --max-products 2
-```
-
-The command:
-
-- Searches for the specified product/query
-- Collects matching products
-- Processes the data
-- Saves CSV and Excel files
-- Performs analysis
-- Generates visualizations
-
-### Search Multiple Websites
+Run the main application with:
 
 ```powershell
-python main.py --websites books amazon alibaba flipkart --query light --max-products 2
+python main.py --help
 ```
 
-The scraper manager sends the same search query to each selected website scraper.
-
-Currently, **Books to Scrape** has a working implementation. Amazon, Alibaba, and Flipkart modules safely return empty results until an authorized data-access method is configured.
-
-### Command Options
+The available options include:
 
 | Argument | Description |
 |---|---|
 | `--query` | Product search query |
-| `--websites` | One or more websites to search |
+| `--websites` | One or more supported websites |
 | `--max-products` | Maximum products to collect per website |
 
 Example:
 
 ```powershell
-python main.py --websites books --query "light" --max-products 5
+python main.py --websites amazon --query "laptop" --max-products 5
 ```
+
+Multiple websites can also be selected:
+
+```powershell
+python main.py --websites amazon alibaba flipkart --query "laptop" --max-products 5
+```
+
+The scraper manager sends the search query to each selected website scraper.
+
+> **Note:** Amazon, Alibaba, and Flipkart integrations require an official API or another authorized data-access method before live product data can be collected.
+
+## Streamlit Web Interface
+
+The project includes a Streamlit-based graphical interface.
+
+Start the application with:
+
+```powershell
+streamlit run app.py
+```
+
+The interface provides:
+
+- Website selection
+- Product search
+- Maximum product selection
+- Scraping controls
+- Product results table
+- Summary statistics
+- CSV download
+- Excel download
+
+The Streamlit interface is designed as a user-friendly layer on top of the scraper architecture.
 
 ## Data Processing
 
@@ -208,7 +225,7 @@ Invalid records are removed before export.
 
 ## Data Export
 
-Processed data is saved in two formats:
+Processed data is saved in two formats.
 
 ### CSV
 
@@ -247,17 +264,6 @@ The project performs the following analysis:
 - Number of available products
 - Highest-rated products
 - Lowest-priced products
-
-Example analysis output:
-
-```text
-total_products: 2
-average_price: 40.82
-minimum_price: 29.87
-maximum_price: 51.77
-most_common_rating: 3.0
-available_products: 2
-```
 
 ## Data Visualization
 
@@ -298,36 +304,39 @@ The project includes error handling for:
 - Export errors
 - Visualization errors
 
-The scraper logs important events and errors in:
+The scraper logs important events and errors locally in:
 
 ```text
 logs/scraper.log
 ```
 
+Log files are excluded from Git using `.gitignore`.
+
 ## Ethical Scraping
 
-This project is designed with responsible scraping practices in mind.
+This project is designed with responsible data collection practices in mind.
 
-The scraper:
+The project:
 
-- Checks `robots.txt` before accessing pages.
-- Uses a request delay between requests.
+- Checks `robots.txt` where applicable.
+- Uses request delays where applicable.
 - Handles HTTP errors and failed requests.
 - Avoids aggressive request rates.
 - Should only be used against websites and data sources where access is permitted.
 
 For commercial platforms such as Amazon, Alibaba, and Flipkart, the project should use their official APIs or another authorized data-access method where required by their terms and policies.
 
+The project does not attempt to bypass CAPTCHAs, authentication systems, anti-bot protections, or other access controls.
+
 ## Current Website Support
 
 | Website | Status |
 |---|---|
-| Books to Scrape | Working |
 | Amazon | Authorized integration placeholder |
 | Alibaba | Authorized integration placeholder |
 | Flipkart | Authorized integration placeholder |
 
-**Books to Scrape** is currently used as the working practice data source.
+The scraper architecture is prepared for authorized integrations with these platforms.
 
 ## Testing
 
@@ -342,10 +351,14 @@ The project contains separate test scripts for important components, including:
 - Scraper manager
 - Multi-website search
 - Robots.txt checking
-- Books scraper
 - Logging
 
-The main application has also been tested using both single-website and multi-website commands.
+The scraper manager has been tested to verify that:
+
+- Amazon scraper is correctly selected.
+- Alibaba scraper is correctly selected.
+- Flipkart scraper is correctly selected.
+- Unsupported websites are handled correctly.
 
 ## Example Workflow
 
@@ -356,13 +369,11 @@ Scraper Manager
         ↓
 Select website scraper(s)
         ↓
-Fetch webpage
+Authorized data-access method
         ↓
-Check robots.txt
+Fetch product data
         ↓
-Parse HTML
-        ↓
-Extract product information
+Parse product information
         ↓
 Handle pagination
         ↓
@@ -390,13 +401,12 @@ Possible future improvements include:
 - Authorized Flipkart API integration
 - Advanced search filtering
 - Category-based searches
-- Concurrent scraping where permitted
+- Concurrent data collection where permitted
 - Retry mechanisms with exponential backoff
 - Database storage
-- Web-based user interface
-- Automated scheduled scraping
+- Advanced interactive dashboards
+- Automated scheduled data collection
 - More advanced analytics
-- Interactive dashboards
 
 ## Author
 
@@ -407,4 +417,6 @@ Machine Learning Intern
 
 ## License
 
-This project is intended for educational and portfolio purposes. Always review the target website's terms, robots.txt, API documentation, and applicable policies before collecting data.
+This project is intended for educational and portfolio purposes.
+
+Always review the target website's terms, `robots.txt`, API documentation, and applicable policies before collecting data.

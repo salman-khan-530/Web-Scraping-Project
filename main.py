@@ -65,9 +65,8 @@ def main():
     parser.add_argument(
         "--websites",
         nargs="+",
-        default=["books"],
+        default=["amazon"],
         choices=[
-            "books",
             "amazon",
             "alibaba",
             "flipkart"

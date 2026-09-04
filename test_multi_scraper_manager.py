@@ -1,7 +1,5 @@
 from scraper.scraper_manager import ScraperManager
 
-from scraper.books_scraper import BooksToScrapeScraper
-
 from scraper.amazon_scraper import AmazonScraper
 
 from scraper.alibaba_scraper import AlibabaScraper
@@ -13,7 +11,6 @@ manager = ScraperManager()
 
 
 websites = {
-    "books": BooksToScrapeScraper,
     "amazon": AmazonScraper,
     "alibaba": AlibabaScraper,
     "flipkart": FlipkartScraper

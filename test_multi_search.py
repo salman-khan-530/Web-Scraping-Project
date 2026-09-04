@@ -12,7 +12,6 @@ print("=" * 50)
 results = manager.search_multiple(
     query="light",
     websites=[
-        "books",
         "amazon",
         "alibaba",
         "flipkart"

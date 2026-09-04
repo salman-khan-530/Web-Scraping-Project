@@ -1,4 +1,3 @@
-from scraper.books_scraper import BooksToScrapeScraper
 from scraper.amazon_scraper import AmazonScraper
 from scraper.alibaba_scraper import AlibabaScraper
 from scraper.flipkart_scraper import FlipkartScraper
@@ -14,7 +13,6 @@ class ScraperManager:
     def __init__(self):
 
         self.scrapers = {
-            "books": BooksToScrapeScraper(),
             "amazon": AmazonScraper(),
             "alibaba": AlibabaScraper(),
             "flipkart": FlipkartScraper()
