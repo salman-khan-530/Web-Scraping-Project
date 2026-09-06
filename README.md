@@ -1,422 +1,280 @@
 # E-Commerce Product Data Web Scraper
 
-A modular Python-based web scraping project that collects e-commerce product information, processes and validates the data, exports it to CSV and Excel, and performs basic analysis and visualization.
+A robust, modular, and compliance-first Python web scraping, data processing, and visualization system. This project collects structured product records, sanitizes and standardizes messy text, normalizes pricing and ratings, eliminates duplicate entries, performs automated quality validation, and exports clean datasets to both CSV and Excel formats. It features both an interactive command-line interface (CLI) and a rich Streamlit web dashboard.
+
+---
+
+## Table of Contents
+
+- [Project Overview](#project-overview)
+- [Key Features](#key-features)
+- [Architecture & Design](#architecture--design)
+- [Technologies Used](#technologies-used)
+- [Project Directory Structure](#project-directory-structure)
+- [Installation & Setup](#installation--setup)
+- [How to Run](#how-to-run)
+  - [Streamlit Web Application](#streamlit-web-application)
+  - [Command-Line Interface (CLI)](#command-line-interface-cli)
+- [Testing Source vs. Production APIs](#testing-source-vs-production-apis)
+- [API Configuration](#api-configuration)
+- [Running Automated Tests](#running-automated-tests)
+- [Data Pipeline Details](#data-pipeline-details)
+- [License & Academic Integrity](#license--academic-integrity)
+
+---
 
 ## Project Overview
 
-The **E-Commerce Product Data Web Scraper** is designed to collect structured product information from e-commerce sources using appropriate and authorized data-access methods.
+The **E-Commerce Product Data Web Scraper** is designed to bridge the gap between raw, unstructured web data and production-ready business intelligence. In accordance with legal, ethical, and academic standards:
 
-The project architecture currently includes scraper modules for **Amazon, Alibaba, and Flipkart**. These modules are structured to support integration through official APIs or other authorized data-access methods.
+1. **Test Demonstration Source**: Uses [Books to Scrape](https://books.toscrape.com/) as a designated safe sandbox, labeled strictly as **Test Site**, to prove the live, multi-page HTML extraction pipeline without breaking site terms or anti-scraping protections.
+2. **Authorized Enterprise E-Commerce (Amazon, Flipkart, Alibaba)**: Built on an API-first interface (`BaseScraper`). Direct scraping, CAPTCHA bypass, and stealth evasion are explicitly prohibited. Instead, clean adapter stubs connect directly to official/partner APIs when credentials (`.env`) are supplied.
 
-### Data Collected
+---
 
-For each product, the scraper is designed to handle:
+## Key Features
 
-- Product name
-- Product price
-- Product rating
-- Availability/status
-- Product URL
-- Product category
-- Product description
-- Data source
+- **Object-Oriented Scraper Architecture**: Standardized `BaseScraper` contract ensuring all sources produce uniform dictionaries (`name`, `price`, `rating`, `availability`, `url`, `category`, `description`, `source`).
+- **Robots.txt Compliance & Domain Caching**: Synchronously validates crawling permissions against `robots.txt` per RFC 9309 rules, caching parsed policies by hostname to avoid duplicate network roundtrips.
+- **Polite Rate Limiting & Session Pooling**: Reuses persistent `requests.Session` connections with realistic user-agent headers, configurable timeouts, and polite inter-request delays.
+- **Controlled Pagination**: Traverses multi-page catalogs up to user limits with safety bounds to prevent infinite loops.
+- **Search & Filtering**: Real-time keyword filtering across catalog pod titles.
+- **Data Cleaning & Text Normalization**:
+  - Cleans encoding artifacts (e.g., latin1/mojibake errors like `Â`).
+  - Strips arbitrary currency symbols (`£`, `$`, `€`, `₹`) and thousand separators, parsing prices to standard floats.
+  - Converts text ratings (`One` → 1.0, `Five` → 5.0) and fractional ratings (`4.5 out of 5`) into a 1.0–5.0 numeric scale.
+  - Normalizes inventory statuses (e.g., `in stock (19 available)` → `In Stock`).
+- **Deduplication & Non-Destructive Validation**:
+  - Removes duplicate records using URL-based hashing and exact row matching.
+  - Preserves records with missing optional fields (e.g., missing descriptions or ratings) while filtering invalid records missing mandatory keys (name or URL).
+- **Multi-Format Styled Exports**:
+  - **CSV**: UTF-8 with BOM (`utf-8-sig`) for compatibility with Microsoft Excel on Windows.
+  - **Excel**: Formatted `.xlsx` workbooks generated using `openpyxl`, featuring bold styled headers, background fills, and auto-adjusted column widths.
+- **Visual Analytics**: Interactive Plotly visualizations (price distribution histograms, rating breakdown bar charts, availability pie charts, and category distribution charts).
+- **Streamlit Web UI**: Full-featured user interface with metric summary cards, clickable catalog links, dynamic Plotly charts, insights cards, and direct CSV/Excel download buttons.
+- **Robust Centralized Logging**: Logs operations, network requests, HTTP status codes, cleaning actions, and errors to `logs/scraper.log`.
 
-## Features
-
-- Web scraping architecture with Python Requests
-- HTML parsing with BeautifulSoup
-- Pagination handling
-- Product search
-- Multiple website scraper architecture
-- `robots.txt` checking
-- Request delays
-- Timeout and connection error handling
-- Missing HTML element handling
-- Data cleaning and preprocessing
-- Duplicate removal
-- Missing-value handling
-- Price conversion to numeric values
-- Rating standardization
-- Data validation
-- CSV export
-- Excel export
-- Statistical analysis
-- Data visualization
-- Logging
-- Command-line interface
-- Streamlit web interface
-- Modular and reusable project structure
+---
 
 ## Technologies Used
 
-- Python 3.12
-- Requests
-- BeautifulSoup4
-- Pandas
-- OpenPyXL
-- Matplotlib
-- Streamlit
-- Jupyter Notebook
-- Git & GitHub
+- **Python 3.12**
+- **Requests**: HTTP networking and session pooling.
+- **BeautifulSoup4**: HTML document parsing and CSS selector extraction.
+- **Pandas**: Structured data cleaning, transformation, and deduplication.
+- **OpenPyXL**: Styled Microsoft Excel spreadsheet generation.
+- **Plotly**: Interactive charts and data visualizations.
+- **Streamlit**: Modern interactive web interface.
+- **Matplotlib**: Headless and static visualization engine.
+- **Python-dotenv**: Environment variable management.
+- **Unittest**: Automated test suite.
 
-## Project Structure
+---
+
+## Project Directory Structure
 
 ```text
 Web Scraping Project/
 │
-├── scraper/
+├── app.py                     # Streamlit web dashboard application
+├── main.py                    # Command-line interface entry point
+├── requirements.txt           # Clean runtime dependencies
+├── README.md                  # Comprehensive documentation
+├── .gitignore                 # Git ignore rules (logs, venv, cache, secrets)
+├── .env.example               # Template for API credentials
+│
+├── scraper/                   # Core scraping & data processing package
+│   ├── __init__.py            # Package initialization & exports
+│   ├── base_scraper.py        # BaseScraper interface & ApiNotConfiguredError
+│   ├── scraper_manager.py     # Multi-scraper registry & coordinator
+│   ├── test_scraper.py        # Fully working scraper for Test Site
+│   ├── amazon_scraper.py      # Authorized API integration stub for Amazon
+│   ├── flipkart_scraper.py    # Authorized API integration stub for Flipkart
+│   ├── alibaba_scraper.py     # Authorized API integration stub for Alibaba
+│   ├── http_client.py         # Resilient HTTP client with rate-limiting
+│   ├── robots_checker.py      # Robots.txt compliance engine with domain cache
+│   ├── data_processor.py      # Data cleaning, normalization, and validation
+│   ├── exporter.py            # CSV & OpenPyXL Excel export utilities
+│   ├── analyzer.py            # Summary statistics and metric calculation
+│   ├── visualizer.py          # Matplotlib-based chart generation
+│   ├── config.py              # Centralized application configuration
+│   └── logger.py              # Log configuration & handlers
+│
+├── tests/                     # Automated test suite (34 unit tests)
 │   ├── __init__.py
-│   ├── config.py
-│   ├── logger.py
-│   ├── http_client.py
-│   ├── robots_checker.py
-│   ├── parser.py
-│   ├── pagination.py
-│   ├── base_scraper.py
-│   ├── amazon_scraper.py
-│   ├── alibaba_scraper.py
-│   ├── flipkart_scraper.py
-│   ├── scraper_manager.py
-│   ├── data_processor.py
-│   ├── exporter.py
-│   ├── analyzer.py
-│   └── visualizer.py
+│   ├── test_http_client.py    # Tests for HTTP requests, errors, and timeouts
+│   ├── test_robots_checker.py # Tests for robots.txt rules and caching
+│   ├── test_test_scraper.py   # Tests for extraction, pagination, and details
+│   ├── test_scraper_manager.py# Tests for scraper routing and API errors
+│   ├── test_data_processor.py # Tests for price/rating cleaning & validation
+│   ├── test_exporter.py       # Tests for CSV/Excel file creation & styling
+│   └── test_analyzer.py       # Tests for statistical metrics & edge cases
 │
-├── data/
+├── output/                    # Generated datasets and exports
+│   ├── products.csv           # Cleaned product CSV dataset
+│   └── products.xlsx          # Cleaned product Excel workbook
 │
-├── output/
-│   ├── products.csv
-│   └── products.xlsx
+├── logs/                      # Application activity logs
+│   └── scraper.log            # Detailed execution & audit log
 │
-├── notebooks/
-│   └── 01_requests_basics.ipynb
-│
-├── logs/
-│
-├── app.py
-├── main.py
-├── analyze_data.py
-├── visualize_data.py
-├── requirements.txt
-├── README.md
-└── .gitignore
+└── notebooks/                 # Exploratory research notebooks
+    └── 01_requests_basics.ipynb
 ```
 
-## Installation
+---
 
-### 1. Clone the Repository
+## Installation & Setup
 
-```bash
-git clone https://github.com/salman-khan-530/Web-Scraping-Project.git
-```
+### 1. Prerequisites
+- **Python 3.12** installed on your system.
+- PowerShell or Terminal with administrative access if required.
 
-### 2. Navigate to the Project
-
-```bash
-cd Web-Scraping-Project
-```
-
-### 3. Create a Virtual Environment
-
-```bash
+### 2. Create Virtual Environment
+Open PowerShell inside the project folder:
+```powershell
 python -m venv .venv
 ```
 
-### 4. Activate the Virtual Environment
-
-#### Windows PowerShell
-
+### 3. Activate the Virtual Environment
+On Windows PowerShell:
 ```powershell
 .venv\Scripts\Activate.ps1
 ```
+*(If you encounter execution policy restrictions in PowerShell, run `Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass` first).*
 
-### 5. Install Dependencies
-
-```bash
+### 4. Install Dependencies
+Install all required packages from `requirements.txt`:
+```powershell
 pip install -r requirements.txt
 ```
 
-## Usage
+---
 
-The project provides both a command-line interface and a Streamlit web interface.
+## How to Run
 
-### Command-Line Interface
+### Streamlit Web Application
 
-Run the main application with:
+Launch the web dashboard:
+```powershell
+streamlit run app.py
+```
+Or when running from the virtual environment directly:
+```powershell
+.\.venv\Scripts\streamlit.exe run app.py
+```
 
+The application will open in your default browser at `http://localhost:8501`.
+
+#### Using the UI:
+1. **Target Source**: Choose **Test Site** from the sidebar dropdown (or select Amazon/Flipkart/Alibaba if credentials are configured).
+2. **Search Query**: Type a keyword (e.g. `light`, `poetry`, `art`).
+3. **Maximum Products**: Select the target item count (1–100).
+4. **Click `🔎 Search Products`**:
+   - Live scraping runs in the background.
+   - Summary metric cards update (`Products Found`, `Average Price`, `Average Rating`, `In Stock`).
+   - Cleaned catalog table renders with clickable product URLs.
+   - Interactive Plotly charts visualize price, rating, availability, and category distributions.
+   - Key insights highlight most expensive, cheapest, and highest-rated products.
+   - Direct download buttons provide instant access to the cleaned `CSV` and `Excel` files.
+
+---
+
+### Command-Line Interface (CLI)
+
+Run `main.py` directly from the command line:
+
+#### Basic Test Scrape:
+```powershell
+python main.py --query "light" --websites test --max-products 5
+```
+
+#### Save Visualizations to Disk:
+```powershell
+python main.py --query "art" --websites test --max-products 10 --save-plots
+```
+*(Saved plots will be created in `output/plots/`).*
+
+#### View CLI Options:
 ```powershell
 python main.py --help
 ```
 
-The available options include:
+---
 
-| Argument | Description |
-|---|---|
-| `--query` | Product search query |
-| `--websites` | One or more supported websites |
-| `--max-products` | Maximum products to collect per website |
+## Testing Source vs. Production APIs
 
-Example:
+| Feature / Website | **Test Site** (Books to Scrape) | **Amazon / Flipkart / Alibaba** |
+| :--- | :--- | :--- |
+| **Purpose** | Pipeline demonstration & evaluation | Production authorized integration |
+| **Authentication** | None required | Requires authorized API credentials |
+| **Access Method** | Live HTML parsing & HTTP requests | Official partner / developer REST API |
+| **robots.txt Checked** | Yes (`/robots.txt` evaluated) | Handled by API protocols |
+| **Default Status** | **Ready to run out-of-the-box** | Configured via `.env` credentials |
 
+---
+
+## API Configuration
+
+To enable Amazon, Flipkart, or Alibaba integration:
+
+1. Copy the template `.env.example` to `.env`:
+   ```powershell
+   Copy-Item .env.example .env
+   ```
+2. Open `.env` and provide your authorized API keys:
+   ```env
+   AMAZON_API_KEY=your_authorized_amazon_key_here
+   FLIPKART_API_KEY=your_authorized_flipkart_key_here
+   ALIBABA_API_KEY=your_authorized_alibaba_key_here
+   ```
+3. If credentials are missing, the system will gracefully alert you in both the UI and CLI rather than attempting prohibited web scraping or returning simulated fake records.
+
+---
+
+## Running Automated Tests
+
+A comprehensive unit test suite covering all modules is located in `tests/`.
+
+Run all 34 automated unit tests:
 ```powershell
-python main.py --websites amazon --query "laptop" --max-products 5
+python -m unittest discover tests -v
 ```
-
-Multiple websites can also be selected:
-
+Or via `.venv`:
 ```powershell
-python main.py --websites amazon alibaba flipkart --query "laptop" --max-products 5
+.\.venv\Scripts\python.exe -m unittest discover tests -v
 ```
 
-The scraper manager sends the search query to each selected website scraper.
+### Test Coverage Highlights:
+- **`test_http_client.py`**: Validates request dispatch, connection failures, timeout recovery, and robots.txt blocking.
+- **`test_robots_checker.py`**: Tests RFC 9309 rules, 404 allowances, fail-closed handling on unreachable hosts, and domain caching.
+- **`test_test_scraper.py`**: Verifies HTML card extraction, detail page parsing, pagination, and missing-field tolerance.
+- **`test_scraper_manager.py`**: Tests scraper registry, multi-search coordination, and `ApiNotConfiguredError` detection.
+- **`test_data_processor.py`**: Tests multi-currency conversion, word-to-numeric ratings, duplicate removal, and non-destructive validation.
+- **`test_exporter.py`**: Validates CSV and OpenPyXL Excel generation, directory auto-creation, and header styling.
+- **`test_analyzer.py`**: Validates summary statistics, top/lowest calculations, and empty DataFrame edge cases.
 
-> **Note:** Amazon, Alibaba, and Flipkart integrations require an official API or another authorized data-access method before live product data can be collected.
+---
 
-## Streamlit Web Interface
+## Data Pipeline Details
 
-The project includes a Streamlit-based graphical interface.
-
-Start the application with:
-
-```powershell
-streamlit run app.py
+```mermaid
+graph TD
+    A[User Query & Source Selection] --> B[Robots.txt & Compliance Check]
+    B -->|Allowed| C[HTTP Request with Polite Delay]
+    B -->|Disallowed / Network Error| X[Fail-Closed / Halt]
+    C --> D[HTML Extraction & Card Parsing]
+    D --> E[Pagination Loop until Max Products]
+    E --> F[Raw Product Dictionaries]
+    F --> G[Data Cleaning & Normalization]
+    G --> H[Duplicate Removal URL & Exact]
+    G --> I[Quality Validation Non-Destructive]
+    I --> J[CSV & OpenPyXL Excel Exports]
+    I --> K[Statistical Analysis & Plotly Visuals]
+    I --> L[Interactive Streamlit Dashboard]
 ```
 
-The interface provides:
+---
 
-- Website selection
-- Product search
-- Maximum product selection
-- Scraping controls
-- Product results table
-- Summary statistics
-- CSV download
-- Excel download
+## License & Academic Integrity
 
-The Streamlit interface is designed as a user-friendly layer on top of the scraper architecture.
-
-## Data Processing
-
-After scraping, the collected data passes through a preprocessing pipeline.
-
-### Cleaning
-
-- Product names are stripped and normalized.
-- Prices are converted to numeric values.
-- Ratings are standardized to values from 1 to 5.
-- Availability values are normalized.
-- Text encoding issues are handled.
-- Missing values receive appropriate fallback values.
-
-### Duplicate Removal
-
-Duplicate records are removed using complete-record comparison and product URLs where available.
-
-### Validation
-
-Records are validated to ensure:
-
-- Product name exists.
-- Product URL exists.
-- Price is valid and non-negative.
-- Rating is between 1 and 5.
-
-Invalid records are removed before export.
-
-## Data Export
-
-Processed data is saved in two formats.
-
-### CSV
-
-```text
-output/products.csv
-```
-
-### Excel
-
-```text
-output/products.xlsx
-```
-
-The exported dataset contains:
-
-```text
-name
-price
-rating
-availability
-url
-category
-description
-source
-```
-
-## Data Analysis
-
-The project performs the following analysis:
-
-- Total number of products
-- Average product price
-- Minimum price
-- Maximum price
-- Most common rating
-- Number of available products
-- Highest-rated products
-- Lowest-priced products
-
-## Data Visualization
-
-The project generates visualizations for:
-
-### 1. Price Distribution
-
-Shows how product prices are distributed.
-
-### 2. Rating Distribution
-
-Shows the number of products for each rating.
-
-### 3. Price vs Rating
-
-Shows the relationship between product price and rating.
-
-### 4. Products by Category
-
-Shows the number of products in each category.
-
-## Error Handling
-
-The project includes error handling for:
-
-- Invalid URLs
-- Empty search queries
-- Empty product URLs
-- Connection failures
-- Request timeouts
-- HTTP errors
-- Missing HTML elements
-- Invalid prices
-- Invalid ratings
-- Missing data
-- Unsupported websites
-- Failed product-page requests
-- Export errors
-- Visualization errors
-
-The scraper logs important events and errors locally in:
-
-```text
-logs/scraper.log
-```
-
-Log files are excluded from Git using `.gitignore`.
-
-## Ethical Scraping
-
-This project is designed with responsible data collection practices in mind.
-
-The project:
-
-- Checks `robots.txt` where applicable.
-- Uses request delays where applicable.
-- Handles HTTP errors and failed requests.
-- Avoids aggressive request rates.
-- Should only be used against websites and data sources where access is permitted.
-
-For commercial platforms such as Amazon, Alibaba, and Flipkart, the project should use their official APIs or another authorized data-access method where required by their terms and policies.
-
-The project does not attempt to bypass CAPTCHAs, authentication systems, anti-bot protections, or other access controls.
-
-## Current Website Support
-
-| Website | Status |
-|---|---|
-| Amazon | Authorized integration placeholder |
-| Alibaba | Authorized integration placeholder |
-| Flipkart | Authorized integration placeholder |
-
-The scraper architecture is prepared for authorized integrations with these platforms.
-
-## Testing
-
-The project contains separate test scripts for important components, including:
-
-- HTTP requests
-- Parser
-- CSV export
-- Excel export
-- Analyzer
-- Visualization
-- Scraper manager
-- Multi-website search
-- Robots.txt checking
-- Logging
-
-The scraper manager has been tested to verify that:
-
-- Amazon scraper is correctly selected.
-- Alibaba scraper is correctly selected.
-- Flipkart scraper is correctly selected.
-- Unsupported websites are handled correctly.
-
-## Example Workflow
-
-```text
-User enters search query
-        ↓
-Scraper Manager
-        ↓
-Select website scraper(s)
-        ↓
-Authorized data-access method
-        ↓
-Fetch product data
-        ↓
-Parse product information
-        ↓
-Handle pagination
-        ↓
-Fetch product details
-        ↓
-Clean and preprocess data
-        ↓
-Remove duplicates
-        ↓
-Validate records
-        ↓
-Export CSV + Excel
-        ↓
-Analyze data
-        ↓
-Generate visualizations
-```
-
-## Future Improvements
-
-Possible future improvements include:
-
-- Authorized Amazon API integration
-- Authorized Alibaba API integration
-- Authorized Flipkart API integration
-- Advanced search filtering
-- Category-based searches
-- Concurrent data collection where permitted
-- Retry mechanisms with exponential backoff
-- Database storage
-- Advanced interactive dashboards
-- Automated scheduled data collection
-- More advanced analytics
-
-## Author
-
-**Salman Khan**
-
-BSCS (Artificial Intelligence) Student  
-Machine Learning Intern
-
-## License
-
-This project is intended for educational and portfolio purposes.
-
-Always review the target website's terms, `robots.txt`, API documentation, and applicable policies before collecting data.
+This project is developed as part of **Internship Task 11**. It strictly respects web crawling ethics, website Terms of Service, and robots.txt directives. Real-world protected e-commerce portals are accessed strictly through authorized programmatic interfaces.

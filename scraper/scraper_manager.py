@@ -1,164 +1,118 @@
+"""
+Scraper Manager to coordinate and access scrapers across supported websites.
+"""
+
 from scraper.amazon_scraper import AmazonScraper
 from scraper.alibaba_scraper import AlibabaScraper
 from scraper.flipkart_scraper import FlipkartScraper
-
+from scraper.test_scraper import TestScraper
+from scraper.base_scraper import ApiNotConfiguredError
 from scraper.logger import logger
 
 
 class ScraperManager:
     """
-    Manage and select different website scrapers.
+    Manages registration, selection, and multi-source execution of scrapers.
     """
 
     def __init__(self):
-
         self.scrapers = {
+            "test": TestScraper(),
             "amazon": AmazonScraper(),
             "alibaba": AlibabaScraper(),
             "flipkart": FlipkartScraper()
         }
 
-    def get_scraper(self, website):
-        """
-        Return the scraper for the selected website.
+        # Friendly display name mappings
+        self.alias_map = {
+            "test": "test",
+            "test site": "test",
+            "test_site": "test",
+            "amazon": "amazon",
+            "flipkart": "flipkart",
+            "alibaba": "alibaba"
+        }
 
-        Args:
-            website (str): Website identifier.
-
-        Returns:
-            BaseScraper: Selected scraper instance.
-            None: If the website is not supported.
-        """
-
+    def normalize_name(self, website):
+        """Map human or varied keys to internal scraper key."""
         if not isinstance(website, str):
             return None
+        cleaned = website.strip().lower()
+        return self.alias_map.get(cleaned, cleaned)
 
-        website = website.lower().strip()
-
-        return self.scrapers.get(
-            website
-        )
-
-    def search_multiple(
-        self,
-        query,
-        websites=None,
-        max_products=20
-    ):
+    def get_scraper(self, website):
         """
-        Search for a product across multiple websites.
+        Return scraper instance for given website name.
+        """
+        key = self.normalize_name(website)
+        return self.scrapers.get(key)
+
+    def is_configured(self, website):
+        """
+        Check if the target scraper is ready and configured.
+        """
+        scraper = self.get_scraper(website)
+        if scraper is None:
+            return False
+        return scraper.is_configured()
+
+    def search(self, website, query, max_products=20):
+        """
+        Search products on a specific website.
+
+        Raises:
+            ValueError: If website is unsupported.
+            ApiNotConfiguredError: If website API credentials are not set.
+        """
+        scraper = self.get_scraper(website)
+        if scraper is None:
+            raise ValueError(f"Unsupported website: '{website}'")
+
+        return scraper.search_products(query, max_products=max_products)
+
+    def search_multiple(self, query, websites=None, max_products=20):
+        """
+        Search for products across multiple websites.
 
         Args:
             query (str): Product search query.
-            websites (list): Website identifiers.
+            websites (list[str], optional): List of website identifiers.
             max_products (int): Maximum products per website.
 
         Returns:
-            list: Combined product results.
+            list[dict]: Combined product results.
         """
-
         results = []
 
-        # Validate query
-        if not isinstance(query, str):
-
-            logger.warning(
-                "Search query must be a string."
-            )
-
+        if not isinstance(query, str) or not query.strip():
+            logger.warning("Search query is empty or invalid.")
             return results
 
         query = query.strip()
 
-        if not query:
-
-            logger.warning(
-                "Search query is empty."
-            )
-
-            return results
-
-        # Use all supported websites if none are provided
         if websites is None:
+            # Default to test scraper if none provided
+            websites = ["test"]
 
-            websites = list(
-                self.scrapers.keys()
-            )
+        logger.info(f"Multi-search initiated: '{query}' on websites {websites} (limit: {max_products}/site)")
 
-        if not websites:
-
-            logger.warning(
-                "No websites were selected."
-            )
-
-            return results
-
-        logger.info(
-            f"Multi-website search started: "
-            f"'{query}'"
-        )
-
-        logger.info(
-            f"Websites selected: {websites}"
-        )
-
-        # Search each selected website
-        for website in websites:
-
-            scraper = self.get_scraper(
-                website
-            )
-
+        for site in websites:
+            scraper = self.get_scraper(site)
             if scraper is None:
-
-                logger.warning(
-                    f"Unsupported website: "
-                    f"{website}"
-                )
-
+                logger.warning(f"Skipping unsupported website: {site}")
                 continue
-
-            logger.info(
-                f"Searching {website}..."
-            )
 
             try:
-
-                products = scraper.search_products(
-                    query,
-                    max_products
-                )
-
+                products = scraper.search_products(query, max_products=max_products)
                 if products:
-
-                    results.extend(
-                        products
-                    )
-
-                    logger.info(
-                        f"{website}: "
-                        f"{len(products)} products found."
-                    )
-
+                    results.extend(products)
+                    logger.info(f"Retrieved {len(products)} products from {scraper.source_name}")
                 else:
-
-                    logger.info(
-                        f"{website}: "
-                        f"No products found."
-                    )
-
+                    logger.info(f"No products found on {scraper.source_name}")
+            except ApiNotConfiguredError as e:
+                logger.warning(f"{scraper.source_name} skipped: {e}")
             except Exception as e:
+                logger.error(f"Error scraping {scraper.source_name}: {e}")
 
-                logger.error(
-                    f"Error while searching "
-                    f"{website}: {e}"
-                )
-
-                continue
-
-        logger.info(
-            f"Multi-website search completed. "
-            f"Total products: {len(results)}"
-        )
-
+        logger.info(f"Multi-search complete. Total aggregated products: {len(results)}")
         return results

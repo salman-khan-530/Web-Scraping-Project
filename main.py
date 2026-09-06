@@ -1,509 +1,178 @@
-import argparse
+"""
+Command-line interface for the E-Commerce Product Data Web Scraper.
+"""
 
+import argparse
+import sys
+from pathlib import Path
 import pandas as pd
 
+# Reconfigure stdout/stderr for UTF-8 on Windows
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+    try:
+        sys.stderr.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
 from scraper.scraper_manager import ScraperManager
-
-from scraper.config import (
-    CSV_OUTPUT,
-    EXCEL_OUTPUT
-)
-
+from scraper.config import CSV_OUTPUT, EXCEL_OUTPUT
 from scraper.data_processor import clean_data
-
-from scraper.exporter import (
-    export_to_csv,
-    export_to_excel
-)
-
+from scraper.exporter import export_to_csv, export_to_excel
 from scraper.analyzer import (
     generate_summary,
     highest_rated_products,
-    lowest_priced_products
+    lowest_priced_products,
+    most_expensive_products
 )
-
-from scraper.visualizer import (
-    plot_price_distribution,
-    plot_rating_distribution,
-    plot_price_vs_rating,
-    plot_products_by_category
-)
-
+from scraper.visualizer import show_all_visualizations
 from scraper.logger import logger
 
 
 def main():
-
-    # ==========================================
-    # Create command-line parser
-    # ==========================================
-
     parser = argparse.ArgumentParser(
-        description=(
-            "E-Commerce Product Data "
-            "Web Scraper"
-        )
+        description="E-Commerce Product Data Web Scraper CLI"
     )
-
-
-    # ==========================================
-    # Product search query
-    # ==========================================
 
     parser.add_argument(
         "--query",
         type=str,
         required=True,
-        help="Product search query."
+        help="Product search keyword (e.g. 'light', 'python', 'book')."
     )
-
-
-    # ==========================================
-    # Websites
-    # ==========================================
 
     parser.add_argument(
         "--websites",
         nargs="+",
-        default=["amazon"],
-        choices=[
-            "amazon",
-            "alibaba",
-            "flipkart"
-        ],
-        help=(
-            "Websites to search. "
-            "You can select one or multiple websites."
-        )
+        default=["test"],
+        choices=["test", "amazon", "alibaba", "flipkart"],
+        help="Websites to search. Options: test, amazon, alibaba, flipkart. Default: test."
     )
-
-
-    # ==========================================
-    # Maximum products per website
-    # ==========================================
 
     parser.add_argument(
         "--max-products",
         type=int,
         default=20,
-        help=(
-            "Maximum number of products to collect "
-            "from each website."
-        )
+        help="Maximum number of products to collect per website (default: 20)."
     )
 
-
-    # ==========================================
-    # Parse arguments
-    # ==========================================
+    parser.add_argument(
+        "--save-plots",
+        action="store_true",
+        help="Save static visualization charts into output/plots/ directory."
+    )
 
     args = parser.parse_args()
 
-
-    # ==========================================
-    # Validate max products
-    # ==========================================
-
+    # Input validations
     if args.max_products <= 0:
+        print("\n[Error] --max-products must be greater than zero.")
+        sys.exit(1)
 
-        print(
-            "\nError: --max-products must be "
-            "greater than zero."
-        )
+    query = args.query.strip()
+    if not query:
+        print("\n[Error] --query cannot be empty.")
+        sys.exit(1)
 
-        return
-
-
-    # ==========================================
-    # Validate query
-    # ==========================================
-
-    if not args.query.strip():
-
-        print(
-            "\nError: --query cannot be empty."
-        )
-
-        return
-
-
-    # ==========================================
-    # Display application information
-    # ==========================================
-
-    print("\n" + "=" * 60)
-
-    print(
-        "       E-COMMERCE PRODUCT DATA WEB SCRAPER"
-    )
-
-    print("=" * 60)
-
-
-    print(
-        f"\nSearch query: {args.query}"
-    )
-
-    print(
-        f"Websites: "
-        f"{', '.join(args.websites)}"
-    )
-
-    print(
-        f"Maximum products per website: "
-        f"{args.max_products}"
-    )
-
-
-    # ==========================================
-    # Create scraper manager
-    # ==========================================
+    print("\n" + "=" * 65)
+    print("        E-COMMERCE PRODUCT DATA WEB SCRAPER")
+    print("=" * 65)
+    print(f"  Search Query : {query}")
+    print(f"  Websites     : {', '.join(args.websites)}")
+    print(f"  Max Products : {args.max_products}")
+    print("=" * 65)
 
     manager = ScraperManager()
 
+    # Check for unconfigured APIs among selected websites
+    for site in args.websites:
+        if site != "test" and not manager.is_configured(site):
+            scraper = manager.get_scraper(site)
+            name = scraper.source_name if scraper else site.capitalize()
+            print(f"\n[Notice] {name} API is not configured.")
+            print(f"         Set {scraper.env_var} in your environment or .env file to enable official access.")
 
-    # ==========================================
-    # Search selected websites
-    # ==========================================
+    logger.info(f"Starting CLI scrape run: query='{query}', websites={args.websites}")
 
-    logger.info(
-        "Starting multi-website search..."
-    )
-
-    products = manager.search_multiple(
-        query=args.query,
+    # Collect raw products
+    raw_products = manager.search_multiple(
+        query=query,
         websites=args.websites,
         max_products=args.max_products
     )
 
+    print(f"\nCollected {len(raw_products)} raw product record(s).")
 
-    print(
-        f"\nProducts collected: "
-        f"{len(products)}"
-    )
-
-
-    # ==========================================
-    # Stop if no products found
-    # ==========================================
-
-    if not products:
-
-        print(
-            "\nNo products were collected."
-        )
-
+    if not raw_products:
+        print("\nNo matching products found. Try a different query or ensure your API credentials are set.")
         return
 
+    # Create DataFrame and clean data
+    raw_df = pd.DataFrame(raw_products)
+    print("\nCleaning, standardizing, and validating product data...")
+    cleaned_df = clean_data(raw_df)
 
-    # ==========================================
-    # Create DataFrame
-    # ==========================================
-
-    df = pd.DataFrame(
-        products
-    )
-
-
-    print(
-        f"\nDataFrame created: "
-        f"{df.shape[0]} rows × "
-        f"{df.shape[1]} columns"
-    )
-
-
-    # ==========================================
-    # Required columns
-    # ==========================================
-
-    required_columns = [
-        "name",
-        "price",
-        "rating",
-        "availability",
-        "url",
-        "category",
-        "description",
-        "source"
-    ]
-
-
-    missing_columns = [
-        column
-        for column in required_columns
-        if column not in df.columns
-    ]
-
-
-    if missing_columns:
-
-        logger.error(
-            f"Missing required columns: "
-            f"{missing_columns}"
-        )
-
-        print(
-            "\nRequired columns are missing:"
-        )
-
-        print(
-            missing_columns
-        )
-
+    if cleaned_df.empty:
+        print("\nNo valid records remained after cleaning and validation.")
         return
 
+    print(f"Data cleaning complete. Clean records: {len(cleaned_df)}")
 
-    print(
-        "\nAll required columns are present."
-    )
-
-
-    # ==========================================
-    # Clean and process data
-    # ==========================================
-
-    print(
-        "\nCleaning and processing data..."
-    )
-
-
-    df = clean_data(
-        df
-    )
-
-
-    print(
-        f"Data cleaning completed. "
-        f"Final records: {len(df)}"
-    )
-
-
-    # ==========================================
-    # Stop if no valid records remain
-    # ==========================================
-
-    if df.empty:
-
-        print(
-            "\nNo valid records remain "
-            "after data cleaning."
-        )
-
-        return
-
-
-    # ==========================================
-    # Export data
-    # ==========================================
-
-    print(
-        "\nExporting data..."
-    )
-
-
+    # Export
+    print("\nExporting cleaned dataset...")
     try:
-
-        export_to_csv(
-            df,
-            CSV_OUTPUT
-        )
-
-        export_to_excel(
-            df,
-            EXCEL_OUTPUT
-        )
-
+        export_to_csv(cleaned_df, CSV_OUTPUT)
+        export_to_excel(cleaned_df, EXCEL_OUTPUT)
+        print(f" -> CSV output   : {CSV_OUTPUT}")
+        print(f" -> Excel output : {EXCEL_OUTPUT}")
     except Exception as e:
-
-        logger.error(
-            f"Data export failed: {e}"
-        )
-
-        print(
-            f"\nExport failed: {e}"
-        )
-
+        logger.error(f"Export failure: {e}")
+        print(f"[Error] Export failed: {e}")
         return
 
+    # Analysis Summary
+    print("\n" + "-" * 40)
+    print("          ANALYSIS SUMMARY")
+    print("-" * 40)
+    summary = generate_summary(cleaned_df)
+    for key, val in summary.items():
+        label = key.replace("_", " ").title()
+        if isinstance(val, float):
+            print(f"  {label:<24}: {val:.2f}")
+        else:
+            print(f"  {label:<24}: {val}")
 
-    # ==========================================
-    # Analysis
-    # ==========================================
+    # Top & Lowest products (using safe ASCII formatting)
+    highest = highest_rated_products(cleaned_df, top_n=3)
+    if not highest.empty:
+        print("\n  Top-Rated Products:")
+        for _, row in highest.iterrows():
+            r_str = f"{row['rating']} stars" if pd.notna(row['rating']) else "N/A"
+            p_str = f"GBP {row['price']:.2f}" if pd.notna(row['price']) else "N/A"
+            print(f"   * {row['name']} ({r_str}) - {p_str}")
 
-    print(
-        "\nRunning analysis..."
-    )
+    lowest = lowest_priced_products(cleaned_df, top_n=3)
+    if not lowest.empty:
+        print("\n  Lowest-Priced Products:")
+        for _, row in lowest.iterrows():
+            r_str = f"{row['rating']} stars" if pd.notna(row['rating']) else "N/A"
+            p_str = f"GBP {row['price']:.2f}" if pd.notna(row['price']) else "N/A"
+            print(f"   * {row['name']} - {p_str} ({r_str})")
 
+    # Optional plot saving
+    if args.save_plots:
+        plots_dir = "output/plots"
+        print(f"\nGenerating and saving plot figures to {plots_dir}...")
+        show_all_visualizations(cleaned_df, save_dir=plots_dir, show=False)
+        print(" -> Charts saved successfully.")
 
-    summary = generate_summary(
-        df
-    )
-
-
-    highest_rated = highest_rated_products(
-        df
-    )
-
-
-    lowest_priced = lowest_priced_products(
-        df
-    )
-
-
-    # ==========================================
-    # Display analysis summary
-    # ==========================================
-
-    print(
-        "\nAnalysis Summary"
-    )
-
-    print(
-        "-" * 40
-    )
-
-
-    for key, value in summary.items():
-
-        print(
-            f"{key}: {value}"
-        )
-
-
-    # ==========================================
-    # Highest rated products
-    # ==========================================
-
-    print(
-        "\nHighest Rated Products"
-    )
-
-    print(
-        "-" * 40
-    )
-
-
-    if not highest_rated.empty:
-
-        print(
-            highest_rated[
-                [
-                    "name",
-                    "rating",
-                    "price"
-                ]
-            ].to_string(
-                index=False
-            )
-        )
-
-    else:
-
-        print(
-            "No highest-rated products found."
-        )
-
-
-    # ==========================================
-    # Lowest priced products
-    # ==========================================
-
-    print(
-        "\nLowest Priced Products"
-    )
-
-    print(
-        "-" * 40
-    )
-
-
-    if not lowest_priced.empty:
-
-        print(
-            lowest_priced[
-                [
-                    "name",
-                    "rating",
-                    "price"
-                ]
-            ].to_string(
-                index=False
-            )
-        )
-
-    else:
-
-        print(
-            "No lowest-priced products found."
-        )
-
-
-    # ==========================================
-    # Visualizations
-    # ==========================================
-
-    print(
-        "\nGenerating visualizations..."
-    )
-
-
-    try:
-
-        plot_price_distribution(
-            df
-        )
-
-        plot_rating_distribution(
-            df
-        )
-
-        plot_price_vs_rating(
-            df
-        )
-
-        plot_products_by_category(
-            df
-        )
-
-    except Exception as e:
-
-        logger.error(
-            f"Visualization failed: {e}"
-        )
-
-        print(
-            f"\nVisualization error: {e}"
-        )
-
-
-    # ==========================================
-    # Completion message
-    # ==========================================
-
-    print(
-        "\n" + "=" * 60
-    )
-
-    print(
-        "       SCRAPING COMPLETED SUCCESSFULLY"
-    )
-
-    print(
-        "=" * 60
-    )
-
-    print(
-        f"Total products processed: "
-        f"{len(df)}"
-    )
-
-    print(
-        f"CSV output: {CSV_OUTPUT}"
-    )
-
-    print(
-        f"Excel output: {EXCEL_OUTPUT}"
-    )
+    print("\n" + "=" * 65)
+    print("          EXECUTION COMPLETED SUCCESSFULLY")
+    print("=" * 65 + "\n")
 
 
 if __name__ == "__main__":

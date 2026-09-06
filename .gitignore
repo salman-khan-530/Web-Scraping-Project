@@ -1,5 +1,24 @@
+# Virtual Environment
 .venv/
-**pycache**/
-*.pyc
+venv/
+ENV/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Environment Variables & Secrets
+.env
+.env.local
+
+# Jupyter Notebook Checkpoints
 .ipynb_checkpoints/
+
+# Generated Logs
 logs/*.log
+
+# Operating System Specific
+.DS_Store
+Thumbs.db

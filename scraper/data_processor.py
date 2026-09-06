@@ -1,52 +1,33 @@
+"""
+Data processing, cleaning, standardization, and validation pipeline.
+"""
+
+import re
 import pandas as pd
-
-
-def convert_rating(rating):
-    """
-    Convert rating text into a numeric value.
-
-    Args:
-        rating: Rating value.
-
-    Returns:
-        int or None: Numeric rating from 1 to 5.
-    """
-
-    # If rating is already numeric, keep it
-    if isinstance(rating, (int, float)):
-        return rating
-
-    # If rating is a list of rating classes
-    if isinstance(rating, list) and len(rating) > 1:
-
-        rating_map = {
-            "One": 1,
-            "Two": 2,
-            "Three": 3,
-            "Four": 4,
-            "Five": 5
-        }
-
-        return rating_map.get(rating[1])
-
-    return None
+from scraper.logger import logger
 
 
 def clean_text_encoding(text):
     """
-    Fix common UTF-8 encoding issues in scraped text.
-
-    Args:
-        text (str): Text containing encoding problems.
-
-    Returns:
-        str: Cleaned text.
+    Fix common encoding artifacts in text (e.g. latin1 decoded as utf-8).
     """
-
     if not isinstance(text, str):
         return text
 
+    # Common mojibake / encoding artifacts
+    artifacts = {
+        "Â": "",
+        "â€™": "'",
+        "â€œ": '"',
+        "â€": '"',
+        "â€“": "-",
+        "â€”": "--",
+    }
+    for bad, good in artifacts.items():
+        text = text.replace(bad, good)
+
     try:
+        # Attempt standard latin1 to utf-8 recovery
         return text.encode("latin1").decode("utf-8")
     except (UnicodeEncodeError, UnicodeDecodeError):
         return text
@@ -54,271 +35,259 @@ def clean_text_encoding(text):
 
 def clean_product_name(name):
     """
-    Clean and standardize a product name.
-
-    Args:
-        name (str): Product name.
-
-    Returns:
-        str: Cleaned product name.
+    Standardize product name by stripping extra spaces and artifacts.
     """
-
     if not isinstance(name, str):
         return "Unknown"
 
-    name = name.strip()
-
-    name = " ".join(name.split())
-
-    return name
+    name = clean_text_encoding(name)
+    name = " ".join(name.strip().split())
+    return name if name else "Unknown"
 
 
 def clean_price(price):
     """
-    Clean and convert product price into a numeric value.
+    Extract and convert price string to numeric float.
+    Handles symbols (£, $, €, ₹), encoding artifacts (Â), commas, and text.
 
-    Args:
-        price (str): Product price.
-
-    Returns:
-        float or None: Numeric price.
+    Examples:
+        "£51.77" -> 51.77
+        "Â£51.77" -> 51.77
+        "$29.99" -> 29.99
+        "$1,249.50" -> 1249.50
     """
-
-    if price is None:
+    if price is None or (isinstance(price, float) and pd.isna(price)):
         return None
 
-    price = str(price)
+    if isinstance(price, (int, float)):
+        return round(float(price), 2) if price >= 0 else None
 
-    # Remove currency symbols and encoding characters
-    price = price.replace("£", "")
-    price = price.replace("Â", "")
-    price = price.strip()
+    price_str = str(price).strip()
+    price_str = clean_text_encoding(price_str)
 
-    try:
-        return float(price)
-    except ValueError:
-        return None
+    # Remove currency symbols and common artifacts
+    for symbol in ["£", "$", "€", "₹", "¥", "Â"]:
+        price_str = price_str.replace(symbol, "")
+
+    # Remove thousand-separator commas
+    price_str = price_str.replace(",", "").strip()
+
+    # Search for numeric decimal pattern
+    match = re.search(r"(\d+(?:\.\d+)?)", price_str)
+    if match:
+        try:
+            val = float(match.group(1))
+            return round(val, 2)
+        except ValueError:
+            return None
+
+    return None
 
 
 def clean_rating(rating):
     """
-    Convert and standardize product rating.
+    Convert string or numeric rating into standard float between 1 and 5.
 
-    Args:
-        rating: Product rating.
-
-    Returns:
-        float or None: Rating between 1 and 5.
+    Examples:
+        "One" -> 1.0
+        "Five" -> 5.0
+        "4 out of 5" -> 4.0
+        4.5 -> 4.5
     """
+    if rating is None or (isinstance(rating, float) and pd.isna(rating)):
+        return None
 
-    rating_map = {
-        "One": 1,
-        "Two": 2,
-        "Three": 3,
-        "Four": 4,
-        "Five": 5
+    word_map = {
+        "one": 1.0,
+        "two": 2.0,
+        "three": 3.0,
+        "four": 4.0,
+        "five": 5.0
     }
 
-    # Handle text ratings
-    if isinstance(rating, str):
-        rating = rating.strip()
+    # If it's a list (such as CSS classes from BeautifulSoup)
+    if isinstance(rating, (list, tuple)):
+        for item in rating:
+            item_lower = str(item).strip().lower()
+            if item_lower in word_map:
+                return word_map[item_lower]
+        return None
 
-        if rating in rating_map:
-            return rating_map[rating]
+    # If already a number
+    if isinstance(rating, (int, float)):
+        val = float(rating)
+        return val if 1.0 <= val <= 5.0 else None
 
-    # Handle numeric ratings
-    try:
-        rating = float(rating)
+    # If it's a string
+    rating_str = str(rating).strip().lower()
+    if rating_str in word_map:
+        return word_map[rating_str]
 
-        if 1 <= rating <= 5:
-            return rating
-
-    except (ValueError, TypeError):
-        pass
+    # Look for numeric patterns like "4", "4.5", "4 out of 5"
+    match = re.search(r"(\d+(?:\.\d+)?)", rating_str)
+    if match:
+        try:
+            val = float(match.group(1))
+            if 1.0 <= val <= 5.0:
+                return round(val, 1)
+        except ValueError:
+            pass
 
     return None
 
 
 def clean_availability(availability):
     """
-    Clean and standardize product availability.
-
-    Args:
-        availability (str): Product availability status.
-
-    Returns:
-        str: Standardized availability status.
+    Standardize product availability strings.
     """
-
     if not isinstance(availability, str):
         return "Unknown"
 
-    availability = availability.strip()
-
-    availability = " ".join(availability.split())
-
-    if not availability:
+    text = clean_text_encoding(availability).strip().lower()
+    if not text:
         return "Unknown"
 
-    if "in stock" in availability.lower():
+    if "in stock" in text or "available" in text:
         return "In Stock"
+    if "out of stock" in text or "unavailable" in text:
+        return "Out of Stock"
 
-    return availability.title()
+    return " ".join(availability.strip().split()).title()
 
 
 def handle_missing_values(df):
-    """Handle missing values in product data."""
+    """
+    Handle missing values gracefully across all product fields.
+    Does not drop records for missing optional attributes.
+    """
+    df = df.copy()
 
-    df["name"] = df["name"].fillna("Unknown")
-
-    df["availability"] = df["availability"].fillna(
-        "Unknown"
-    )
-
-    df["url"] = df["url"].fillna("N/A")
-
-    df["category"] = df["category"].fillna(
-        "Unknown"
-    )
-
-    df["description"] = df["description"].fillna(
-        "Unknown"
-    )
+    if "name" in df.columns:
+        df["name"] = df["name"].fillna("Unknown")
+    if "availability" in df.columns:
+        df["availability"] = df["availability"].fillna("Unknown")
+    if "url" in df.columns:
+        df["url"] = df["url"].fillna("N/A")
+    if "category" in df.columns:
+        df["category"] = df["category"].fillna("Unknown")
+    if "description" in df.columns:
+        df["description"] = df["description"].fillna("No description available")
+    if "source" in df.columns:
+        df["source"] = df["source"].fillna("Unknown")
 
     return df
 
 
 def remove_duplicates(df):
-    """Remove duplicate product records."""
-
+    """
+    Remove duplicate products based on URL and exact matching.
+    """
     before = len(df)
 
-    # Remove completely identical records
+    # 1. Deduplicate identical rows
     df = df.drop_duplicates()
 
-    # Remove duplicate URLs only when a valid URL exists
-    valid_url = (
-        df["url"].notna()
-        & (df["url"].str.strip() != "")
-        & (df["url"] != "N/A")
-    )
+    # 2. Deduplicate on valid URL when present
+    if "url" in df.columns:
+        valid_url_mask = (
+            df["url"].notna()
+            & (df["url"].astype(str).str.strip() != "")
+            & (df["url"].astype(str) != "N/A")
+        )
 
-    df_with_url = df[valid_url].drop_duplicates(
-        subset="url",
-        keep="first"
-    )
+        df_with_url = df[valid_url_mask].drop_duplicates(subset=["url"], keep="first")
+        df_without_url = df[~valid_url_mask]
+        df = pd.concat([df_with_url, df_without_url], ignore_index=True)
 
-    df_without_url = df[~valid_url]
-
-    df = pd.concat(
-        [df_with_url, df_without_url],
-        ignore_index=True
-    )
-
-    after = len(df)
-
-    print(
-        f"Duplicates removed: "
-        f"{before - after}"
-    )
-
+    removed = before - len(df)
+    logger.info(f"Duplicates removed: {removed}")
     return df
 
 
 def validate_data(df):
-    """Validate product records and remove invalid data."""
-
+    """
+    Validate product records.
+    Requires valid name and URL.
+    Validates price and rating only when present (does not drop if missing).
+    """
     before = len(df)
+    df = df.copy()
 
-    # Remove records without a valid product name
-    df = df[
+    # Name must be valid non-empty string and not "Unknown"
+    valid_name = (
         df["name"].notna()
-        & (df["name"].str.strip() != "")
-    ]
-
-    # Remove records without a valid URL
-    df = df[
-        df["url"].notna()
-        & (df["url"].str.strip() != "")
-        & (df["url"] != "N/A")
-    ]
-
-    # Keep only valid prices
-    df = df[
-        df["price"].notna()
-        & (df["price"] >= 0)
-    ]
-
-    # Keep only valid ratings
-    df = df[
-        df["rating"].notna()
-        & (df["rating"].between(1, 5))
-    ]
-
-    after = len(df)
-
-    print(
-        f"Invalid records removed: "
-        f"{before - after}"
+        & (df["name"].astype(str).str.strip() != "")
+        & (df["name"].astype(str).str.strip().str.lower() != "unknown")
     )
 
-    return df
+    # URL must be valid
+    valid_url = (
+        df["url"].notna()
+        & (df["url"].astype(str).str.strip() != "")
+        & (df["url"].astype(str).str.strip() != "N/A")
+        & (df["url"].astype(str).str.strip().str.startswith(("http://", "https://")))
+    )
 
+    # Price validation: valid when present (>= 0)
+    if "price" in df.columns:
+        valid_price = df["price"].isna() | (df["price"] >= 0)
+    else:
+        valid_price = pd.Series(True, index=df.index)
 
-def create_dataframe(products):
-    """
-    Convert scraped products into a Pandas DataFrame.
+    # Rating validation: valid when present (between 1 and 5)
+    if "rating" in df.columns:
+        valid_rating = df["rating"].isna() | (df["rating"].between(1, 5))
+    else:
+        valid_rating = pd.Series(True, index=df.index)
 
-    Args:
-        products (list): List of product dictionaries.
+    valid_mask = valid_name & valid_url & valid_price & valid_rating
+    cleaned_df = df[valid_mask].reset_index(drop=True)
 
-    Returns:
-        pandas.DataFrame: Product DataFrame.
-    """
-
-    df = pd.DataFrame(products)
-
-    return df
+    removed = before - len(cleaned_df)
+    logger.info(f"Invalid records removed: {removed}")
+    return cleaned_df
 
 
 def clean_data(df):
     """
-    Clean and standardize scraped product data.
-
-    Args:
-        df (pandas.DataFrame): Raw product DataFrame.
-
-    Returns:
-        pandas.DataFrame: Cleaned and validated DataFrame.
+    Full data cleaning and validation pipeline.
     """
+    if df is None or df.empty:
+        logger.warning("Empty DataFrame passed to clean_data.")
+        return pd.DataFrame()
+
+    df = df.copy()
+
+    # Clean individual columns
+    if "name" in df.columns:
+        df["name"] = df["name"].apply(clean_product_name)
+
+    if "price" in df.columns:
+        df["price"] = df["price"].apply(clean_price)
+
+    if "rating" in df.columns:
+        df["rating"] = df["rating"].apply(clean_rating)
+
+    if "availability" in df.columns:
+        df["availability"] = df["availability"].apply(clean_availability)
+
+    if "category" in df.columns:
+        df["category"] = df["category"].apply(
+            lambda x: clean_text_encoding(str(x)).strip() if pd.notna(x) else "Unknown"
+        )
+
+    if "description" in df.columns:
+        df["description"] = df["description"].apply(
+            lambda x: clean_text_encoding(str(x)).strip() if pd.notna(x) else "No description available"
+        )
 
     # Handle missing values
     df = handle_missing_values(df)
 
-    # Clean product names
-    df["name"] = df["name"].apply(clean_product_name)
-
-    # Fix text encoding
-    df["name"] = df["name"].apply(clean_text_encoding)
-    df["availability"] = df["availability"].apply(clean_text_encoding)
-    df["category"] = df["category"].apply(clean_text_encoding)
-    df["description"] = df["description"].apply(clean_text_encoding)
-
-    # Clean availability
-    df["availability"] = df["availability"].apply(
-        clean_availability
-    )
-
-    # Clean price
-    df["price"] = df["price"].apply(clean_price)
-
-    # Standardize rating
-    df["rating"] = df["rating"].apply(clean_rating)
-
-    # Remove duplicate products
+    # Remove duplicates
     df = remove_duplicates(df)
 
-    # Validate product data
+    # Validate records
     df = validate_data(df)
 
     return df
