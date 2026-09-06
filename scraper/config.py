@@ -25,6 +25,16 @@ def _load_env_file(env_path):
 
 _load_env_file(BASE_DIR / ".env")
 
+# Support Streamlit Cloud Secrets when deployed to Streamlit Community Cloud
+try:
+    import streamlit as st
+    if hasattr(st, "secrets"):
+        for k, v in st.secrets.items():
+            if k not in os.environ and isinstance(v, str):
+                os.environ[k] = v
+except Exception:
+    pass
+
 # Ensure runtime directories exist
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 LOGS_DIR.mkdir(parents=True, exist_ok=True)
